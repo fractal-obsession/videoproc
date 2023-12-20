@@ -1,0 +1,151 @@
+{
+  "4": {
+    "inputs": {
+      "ckpt_name": "albedobaseXL_v13.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple"
+  },
+  "6": {
+    "inputs": {
+      "text": "saxophone player dio from jojo's bizarre adventure",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "7": {
+    "inputs": {
+      "text": "watermark",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "17": {
+    "inputs": {
+      "samples": [
+        "63",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "19": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "50": {
+    "inputs": {
+      "image": "example.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage"
+  },
+  "51": {
+    "inputs": {
+      "pixels": [
+        "53",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEEncode"
+  },
+  "53": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "image": [
+        "69",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels"
+  },
+  "63": {
+    "inputs": {
+      "seed": 98987285778056,
+      "steps": 15,
+      "cfg": 7,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "64",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "64": {
+    "inputs": {
+      "strength": 0.3,
+      "conditioning": [
+        "6",
+        0
+      ],
+      "control_net": [
+        "66",
+        0
+      ],
+      "image": [
+        "73",
+        0
+      ]
+    },
+    "class_type": "ControlNetApply"
+  },
+  "66": {
+    "inputs": {
+      "control_net_name": "control-lora-canny-rank128.safetensors"
+    },
+    "class_type": "ControlNetLoader"
+  },
+  "69": {
+    "inputs": {
+      "image": "example.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage"
+  },
+  "73": {
+    "inputs": {
+      "low_threshold": 0.1,
+      "high_threshold": 0.3,
+      "image": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "Canny"
+  }
+}

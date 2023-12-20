@@ -33,9 +33,12 @@ parser.add_argument('--start_frame', type=int, default=0, help='start_frame')
 parser.add_argument('--frame_step', type=int, default=1, help='frame step')
 parser.add_argument('--end_frame', type=int, default=-1, help='frame end')
 parser.add_argument('-t', '--tempdir', default='/tmp/videoproc', help='tempdir')
+parser.add_argument('--audio_modulate', action='store_true', help='audio volume modulation')
 
 # canny
-parser.add_argument('--strength', type=float, default=1, help='controllnet strength')
+parser.add_argument('--canny_strength', type=float, default=1, help='controllnet strength')
+parser.add_argument('--canny_low', type=float, default=0.1, help='threshold low')
+parser.add_argument('--canny_high', type=float, default=0.3, help='threshold high')
 
 args = parser.parse_args()
 
@@ -58,13 +61,14 @@ def vid2frames():
     if args.end_time and args.start_time:
         logging.info("subclip {} to {}".format(args.start_time, args.end_time))
         penis = args.end_time
-        vid = VideoFileClip(args.video, audio_buffersize=500000).subclip(args.start_time, args.end_time)
+        vid = VideoFileClip(args.video, audio_buffersize=5000000).subclip(args.start_time, args.end_time)
     else:
-        vid = VideoFileClip(args.video, audio_buffersize=500000)
+        vid = VideoFileClip(args.video, audio_buffersize=5000000)
 
     logging.info("clip duration is {}".format(vid.duration))
-    audio = vid.audio.to_soundarray(fps=vid.fps, buffersize=500000)
-    logging.info("audio is {}".format(audio))
+    audio = [item[0] for item in abs(vid.audio.to_soundarray(fps=vid.fps, buffersize=5000000, quantize=False))]
+    audio = audio/max(audio)
+    logging.info("got {} audio frames and {} video frames with max(audio) {} and min(audio) {}".format(len(audio), vid.duration * vid.fps, max(audio), min(audio)))
     images = []
 
     for index,frame in enumerate(vid.iter_frames(with_times=True)):
@@ -74,9 +78,9 @@ def vid2frames():
             return images
         if index >= args.start_frame:
             frame_save_path = os.path.join(args.tempdir, "frame_{}.png".format(index))
-            frame_volume = 0
+            frame_volume = audio[index]
             frame_image = PIL.Image.fromarray(frame[1])
-            frame_image.save(frame_save_path)
+            #frame_image.save(frame_save_path)
             images.append((index, frame_save_path, frame_volume))
             logging.info('Read a new frame: {}'.format(frame_save_path))
     logging.info(images)
@@ -98,7 +102,9 @@ def command_runv_canny():
     prompt_workflow['4']['inputs']['ckpt_name'] = args.checkpoint
     prompt_workflow['6']['inputs']['text'] = args.prompt
     prompt_workflow['7']['inputs']['text'] = "watermark"
-    prompt_workflow['64']['inputs']['strength'] = args.strength
+    prompt_workflow['64']['inputs']['strength'] = args.canny_strength
+    prompt_workflow['73']['inputs']['low_threshold'] = args.canny_low
+    prompt_workflow['73']['inputs']['high_threshold'] = args.canny_high
     if args.noise == -1:
         prompt_workflow['63']['inputs']['seed'] = random.randint(1, 18446744073709551614)
     else:
@@ -108,6 +114,9 @@ def command_runv_canny():
         prompt_workflow['19']['inputs']['filename_prefix'] = "{}_frame{}".format(args.command, images[i][0])
         prompt_workflow['50']['inputs']['image'] = images[i][1]
         prompt_workflow['69']['inputs']['image'] = images[i][1]
+        if args.audio_modulate:
+            prompt_workflow['63']['inputs']['denoise'] = images[i][2]
+            logging.info("denoising after audio modulation {}".format(images[i][2]))
         queue_prompt(prompt_workflow)
         print("{}".format(images[i][1]))
 
@@ -150,6 +159,34 @@ def command_run():
                 prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
                 queue_prompt(prompt_workflow)
 
+def command_run_canny():
+    prompt_workflow = json.load(open('i2i_canny_api.json'))
+    prompt_workflow['63']['inputs']['steps'] = args.steps
+    prompt_workflow['63']['inputs']['denoise'] = args.denoise
+    prompt_workflow['4']['inputs']['ckpt_name'] = args.checkpoint
+    prompt_workflow['6']['inputs']['text'] = args.prompt
+    prompt_workflow['7']['inputs']['text'] = "watermark"
+    prompt_workflow['64']['inputs']['strength'] = args.canny_strength
+    prompt_workflow['73']['inputs']['low_threshold'] = args.canny_low
+    prompt_workflow['73']['inputs']['high_threshold'] = args.canny_high
+    if args.noise == -1:
+        prompt_workflow['63']['inputs']['seed'] = random.randint(1, 18446744073709551614)
+    else:
+        prompt_workflow['63']['inputs']['seed'] = args.noise
+    if os.path.isfile(args.dir):
+        prompt_workflow['69']['inputs']['image'] = images[i][1]
+        prompt_workflow['50']['inputs']['image'] = os.path.join(args.dir)
+        prompt_workflow['69']['inputs']['image'] = os.path.join(args.dir)
+        queue_prompt(prompt_workflow)
+    else:
+        for root, dirs, files in os.walk(args.dir):
+            for name in files:
+                print("{}/{}".format(root, name))
+                prompt_workflow['19']['inputs']['filename_prefix'] = "{}_image{}".format(args.command, name)
+                prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
+                prompt_workflow['69']['inputs']['image'] = os.path.join(root, name)
+                queue_prompt(prompt_workflow)
+
 if args.command == "run":
     command_run()
 elif args.command == "status":
@@ -158,3 +195,5 @@ elif args.command == "runv":
     command_runv()
 elif args.command == "runv_canny":
     command_runv_canny()
+elif args.command == "run_canny":
+    command_run_canny()
