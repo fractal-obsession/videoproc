@@ -8,6 +8,8 @@ from moviepy.editor import *
 import PIL
 import numpy
 import tempfile
+import numpy as np
+import time
 
 
 parser = argparse.ArgumentParser(description='ComfyUI tools')
@@ -22,6 +24,8 @@ parser.add_argument('-p', '--prompt', type=str, default='a cow in a dungeon', he
 parser.add_argument('-n', '--noise', type=int, default=random.randint(1, 18446744073709551614), help='noise seed')
 parser.add_argument('-C', '--cfg', type=float, default=10, help='cfg')
 parser.add_argument('-v', '--verbose', action='store_true', help='verbosity')
+parser.add_argument('--dry_run', action='store_true', help='do not submit to api')
+
 # i2i
 parser.add_argument('-d', '--dir', type=str, default='~/ai/ComfyUI/input/batch', help='dir for images')
 
@@ -50,13 +54,15 @@ else:
 def queue_prompt(prompt_workflow):
     p = {"prompt": prompt_workflow}
     data = json.dumps(p).encode('utf-8')
-    req =  requests.post("http://127.0.0.1:8188/prompt", data=data)
-    logging.info("{}".format(req.json()))
+    if not args.dry_run:
+        req =  requests.post("http://127.0.0.1:8188/prompt", data=data)
+        logging.info("{}".format(req.json()))
 
 def vid2frames():
     #tempdir = tempfile.TemporaryDirectory(delete=False)
-    if not os.path.exists(args.tempdir):
-            os.makedirs(args.tempdir)
+    if not args.dry_run:
+        if not os.path.exists(args.tempdir):
+                os.makedirs(args.tempdir)
 
     if args.end_time and args.start_time:
         logging.info("subclip {} to {}".format(args.start_time, args.end_time))
@@ -67,6 +73,7 @@ def vid2frames():
 
     logging.info("clip duration is {}".format(vid.duration))
     audio = [item[0] for item in abs(vid.audio.to_soundarray(fps=vid.fps, buffersize=5000000, quantize=False))]
+    audio = np.convolve(audio, np.ones(5), 'same') / 5
     audio = audio/max(audio)
     logging.info("got {} audio frames and {} video frames with max(audio) {} and min(audio) {}".format(len(audio), vid.duration * vid.fps, max(audio), min(audio)))
     images = []
@@ -80,7 +87,8 @@ def vid2frames():
             frame_save_path = os.path.join(args.tempdir, "frame_{}.png".format(index))
             frame_volume = audio[index]
             frame_image = PIL.Image.fromarray(frame[1])
-            #frame_image.save(frame_save_path)
+            if not args.dry_run:
+                frame_image.save(frame_save_path)
             images.append((index, frame_save_path, frame_volume))
             logging.info('Read a new frame: {}'.format(frame_save_path))
     logging.info(images)
@@ -111,12 +119,12 @@ def command_runv_canny():
         prompt_workflow['63']['inputs']['seed'] = args.noise
     images = vid2frames()
     for i in range(0, len(images), args.frame_step):
-        prompt_workflow['19']['inputs']['filename_prefix'] = "{}_frame{}".format(args.command, images[i][0])
+        prompt_workflow['19']['inputs']['filename_prefix'] = "{}_{}_{}".format(int(time.time()), images[i][0], args.command)
         prompt_workflow['50']['inputs']['image'] = images[i][1]
         prompt_workflow['69']['inputs']['image'] = images[i][1]
         if args.audio_modulate:
-            prompt_workflow['63']['inputs']['denoise'] = images[i][2]
-            logging.info("denoising after audio modulation {}".format(images[i][2]))
+            prompt_workflow['63']['inputs']['denoise'] = args.denoise * images[i][2]
+            logging.info("denoising after audio modulation {}".format(args.denoise * images[i][2]))
         queue_prompt(prompt_workflow)
         print("{}".format(images[i][1]))
 
@@ -133,8 +141,11 @@ def command_runv():
         prompt_workflow['10']['inputs']['_seed'] = args.noise
     images = vid2frames()
     for i in range(0, len(images), args.frame_step):
-        prompt_workflow['19']['inputs']['filename_prefix'] = "{}_frame{}".format(args.command, images[i][0])
+        prompt_workflow['19']['inputs']['filename_prefix'] = "{}_{}_{}".format(int(time.time), images[i][0], args.command)
         prompt_workflow['50']['inputs']['image'] = images[i][1]
+        if args.audio_modulate:
+            prompt_workflow['10']['inputs']['denoise'] = args.denoise * images[i][2]
+            logging.info("denoising after audio modulation {}".format(args.denoise * images[i][2]))
         queue_prompt(prompt_workflow)
         print("{}".format(images[i][1]))
 
@@ -182,7 +193,7 @@ def command_run_canny():
         for root, dirs, files in os.walk(args.dir):
             for name in files:
                 print("{}/{}".format(root, name))
-                prompt_workflow['19']['inputs']['filename_prefix'] = "{}_image{}".format(args.command, name)
+                prompt_workflow['19']['inputs']['filename_prefix'] = "{}_{}".format(int(time.time), args.command)
                 prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
                 prompt_workflow['69']['inputs']['image'] = os.path.join(root, name)
                 queue_prompt(prompt_workflow)
