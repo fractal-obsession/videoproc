@@ -12,7 +12,7 @@ import numpy as np
 import time
 
 
-parser = argparse.ArgumentParser(description='ComfyUI tools')
+parser = argparse.ArgumentParser(description='ComfyUI tools', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('command', type=str, default='run',
                     help='which mode to use, run(image2image), runv(video2images, run_canny, runv_canny (like run and runv but with canny filter conditioning)')
 # general
