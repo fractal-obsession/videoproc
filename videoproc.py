@@ -14,7 +14,7 @@ import time
 
 parser = argparse.ArgumentParser(description='ComfyUI tools', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('command', type=str, default='run',
-                    help='which mode to use, run(image2image), runv(video2images, run_canny, runv_canny (like run and runv but with canny filter conditioning)')
+                    help='which mode to use: status(display queue status) run(image2image), runv(video2images), run_canny, runv_canny (like run and runv but with canny filter conditioning)')
 # general
 parser.add_argument('-c', '--checkpoint', type=str, default='bluePencilXL_v200.safetensors', help='checkpoint name to use, needs to be in ComfyUI/models/checkpoints/')
 parser.add_argument('-w', '--prompt_workflow', type=str, default='i2i_api.json', help='workflow json in api format (not implemented)')
