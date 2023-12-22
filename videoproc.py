@@ -25,6 +25,7 @@ parser.add_argument('-n', '--noise', type=int, default=random.randint(1, 1844674
 parser.add_argument('-C', '--cfg', type=float, default=10, help='cfg')
 parser.add_argument('-v', '--verbose', action='store_true', help='verbosity')
 parser.add_argument('--dry_run', action='store_true', help='do not submit to api')
+parser.add_argument('-o', '--outdir', type=str, default='', help='dir for output images')
 
 # i2i
 parser.add_argument('-d', '--dir', type=str, default='~/ai/ComfyUI/input/batch', help='dir for images')
@@ -119,7 +120,7 @@ def command_runv_canny():
         prompt_workflow['63']['inputs']['seed'] = args.noise
     images = vid2frames()
     for i in range(0, len(images), args.frame_step):
-        prompt_workflow['19']['inputs']['filename_prefix'] = "{}_{}_{}".format(int(time.time()), images[i][0], args.command)
+        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:03d}_{}".format(int(time.time()), images[i][0], args.command))
         prompt_workflow['50']['inputs']['image'] = images[i][1]
         prompt_workflow['69']['inputs']['image'] = images[i][1]
         if args.audio_modulate:
@@ -141,7 +142,7 @@ def command_runv():
         prompt_workflow['10']['inputs']['_seed'] = args.noise
     images = vid2frames()
     for i in range(0, len(images), args.frame_step):
-        prompt_workflow['19']['inputs']['filename_prefix'] = "{}_{}_{}".format(int(time.time), images[i][0], args.command)
+        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:03d}_{}".format(int(time.time()), images[i][0], args.command))
         prompt_workflow['50']['inputs']['image'] = images[i][1]
         if args.audio_modulate:
             prompt_workflow['10']['inputs']['denoise'] = args.denoise * images[i][2]
@@ -167,6 +168,7 @@ def command_run():
         for root, dirs, files in os.walk(args.dir):
             for name in files:
                 print("{}/{}".format(root, name))
+                prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{}".format(int(time.time()), args.command))
                 prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
                 queue_prompt(prompt_workflow)
 
@@ -193,7 +195,7 @@ def command_run_canny():
         for root, dirs, files in os.walk(args.dir):
             for name in files:
                 print("{}/{}".format(root, name))
-                prompt_workflow['19']['inputs']['filename_prefix'] = "{}_{}".format(int(time.time), args.command)
+                prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{}".format(int(time.time()), args.command))
                 prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
                 prompt_workflow['69']['inputs']['image'] = os.path.join(root, name)
                 queue_prompt(prompt_workflow)
