@@ -14,36 +14,36 @@ import time
 
 parser = argparse.ArgumentParser(description='ComfyUI tools')
 parser.add_argument('command', type=str, default='run',
-                    help='workflow json in api format')
+                    help='which mode to use, run(image2image), runv(video2images, run_canny, runv_canny (like run and runv but with canny filter conditioning)')
 # general
-parser.add_argument('-c', '--checkpoint', type=str, default='bluePencilXL_v200.safetensors', help='dir for images')
+parser.add_argument('-c', '--checkpoint', type=str, default='bluePencilXL_v200.safetensors', help='checkpoint name to use, needs to be in ComfyUI/models/checkpoints/')
 parser.add_argument('-w', '--prompt_workflow', type=str, default='i2i_api.json', help='workflow json in api format (not implemented)')
-parser.add_argument('-s', '--steps', type=int, default=30, help='steps total')
-parser.add_argument('-D', '--denoise', type=float, default=0.5, help='start step')
+parser.add_argument('-s', '--steps', type=int, default=30, help='total denoising steps, this does not change with denoising levels')
+parser.add_argument('-D', '--denoise', type=float, default=0.5, help='denoising degree, 0 returns input image, 1 completely ignores input image')
 parser.add_argument('-p', '--prompt', type=str, default='a cow in a dungeon', help='positive prompt')
-parser.add_argument('-n', '--noise', type=int, default=random.randint(1, 18446744073709551614), help='noise seed')
-parser.add_argument('-C', '--cfg', type=float, default=10, help='cfg')
+parser.add_argument('-n', '--noise', type=int, default=random.randint(1, 18446744073709551614), help='noise seed, random if ommited')
+parser.add_argument('-C', '--cfg', type=float, default=10, help='CFG Scale, also known as Configuration Scale, is a parameter in Stable Diffusion that affects how accurately the AI-generated image aligns with the original text prompt.')
 parser.add_argument('-v', '--verbose', action='store_true', help='verbosity')
-parser.add_argument('--dry_run', action='store_true', help='do not submit to api')
+parser.add_argument('--dry_run', action='store_true', help='do not submit to api or create images form video frames')
 parser.add_argument('-o', '--outdir', type=str, default='', help='dir for output images')
 
 # i2i
-parser.add_argument('-d', '--dir', type=str, default='~/ai/ComfyUI/input/batch', help='dir for images')
+parser.add_argument('-d', '--dir', type=str, default='~/ai/ComfyUI/input/batch', help='dir for input images')
 
 # vid
-parser.add_argument('-V', '--video', type=str, default='~/ai/ComfyUI/input/vid1/video1.mp4', help='video')
-parser.add_argument('--start_time', type=float, default=None, help='start time')
-parser.add_argument('--end_time', type=float, default=None, help='end time')
-parser.add_argument('--start_frame', type=int, default=0, help='start_frame')
-parser.add_argument('--frame_step', type=int, default=1, help='frame step')
-parser.add_argument('--end_frame', type=int, default=-1, help='frame end')
-parser.add_argument('-t', '--tempdir', default='/tmp/videoproc', help='tempdir')
+parser.add_argument('-V', '--video', type=str, default='~/ai/ComfyUI/input/vid1/video1.mp4', help='path to video file')
+parser.add_argument('--start_time', type=float, default=None, help='time in seconds(float) from which to start in the video')
+parser.add_argument('--end_time', type=float, default=None, help='time in seconds(float) up to (excluding) which to process video')
+parser.add_argument('--start_frame', type=int, default=0, help='frame from the subclip returned by --start/end_time to start from')
+parser.add_argument('--frame_step', type=int, default=1, help='step between frames, usefull for initial experimentation')
+parser.add_argument('--end_frame', type=int, default=-1, help='frame from the subclip returned by --start/end_time to end on')
+parser.add_argument('-t', '--tempdir', default='/tmp/videoproc', help='directory to store extracted frames before procession by the workflow')
 parser.add_argument('--audio_modulate', action='store_true', help='audio volume modulation')
 
 # canny
-parser.add_argument('--canny_strength', type=float, default=1, help='controllnet strength')
-parser.add_argument('--canny_low', type=float, default=0.1, help='threshold low')
-parser.add_argument('--canny_high', type=float, default=0.3, help='threshold high')
+parser.add_argument('--canny_strength', type=float, default=1, help='strength of the applied canny controllnet from 0 to 1')
+parser.add_argument('--canny_low', type=float, default=0.1, help='canny filter low threshold')
+parser.add_argument('--canny_high', type=float, default=0.3, help='canny filter high threshold')
 
 args = parser.parse_args()
 
