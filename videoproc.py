@@ -3,6 +3,7 @@ import requests
 import random
 import argparse
 import os
+import sys
 import logging
 from moviepy.editor import *
 import PIL
@@ -16,6 +17,7 @@ parser = argparse.ArgumentParser(description='ComfyUI tools', formatter_class=ar
 parser.add_argument('command', type=str, default='run',
                     help='which mode to use: status(display queue status) run(image2image), runv(video2images), run_canny, runv_canny (like run and runv but with canny filter conditioning)')
 # general
+parser.add_argument('-r', '--rootdir', type=str, default=os.path.join(os.environ['HOME'], "ai/ComfyUI/"), help='ComfyUI install directory')
 parser.add_argument('-c', '--checkpoint', type=str, default='bluePencilXL_v200.safetensors', help='checkpoint name to use, needs to be in ComfyUI/models/checkpoints/')
 parser.add_argument('-w', '--prompt_workflow', type=str, default='i2i_api.json', help='workflow json in api format (not implemented)')
 parser.add_argument('-s', '--steps', type=int, default=30, help='total denoising steps, this does not change with denoising levels')
@@ -46,6 +48,12 @@ parser.add_argument('--canny_low', type=float, default=0.1, help='canny filter l
 parser.add_argument('--canny_high', type=float, default=0.3, help='canny filter high threshold')
 
 args = parser.parse_args()
+if not args.checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
+    logging.error("checkpoint must be one of:")
+    for checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
+        logging.error(checkpoint)
+    sys.exit(1)
+
 
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
@@ -103,6 +111,10 @@ def command_status():
     print("{} pending".format(req.json()['queue_pending'].__len__()))
     for job in req.json()['queue_pending']:
         logging.info(job[1])
+
+def command_checkpoint_list():
+    for checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
+        print(checkpoint)
 
 def command_runv_canny():
     prompt_workflow = json.load(open('i2i_canny_api.json'))
@@ -210,3 +222,5 @@ elif args.command == "runv_canny":
     command_runv_canny()
 elif args.command == "run_canny":
     command_run_canny()
+elif args.command == "clist":
+    command_checkpoint_list()
