@@ -110,7 +110,7 @@
     "inputs": {
       "strength": 0.3,
       "conditioning": [
-        "6",
+        "74",
         0
       ],
       "control_net": [
@@ -147,5 +147,29 @@
       ]
     },
     "class_type": "Canny"
+  },
+  "74": {
+    "inputs": {
+      "conditioning_to_strength": 0,
+      "conditioning_to": [
+        "75",
+        0
+      ],
+      "conditioning_from": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "ConditioningAverage"
+  },
+  "75": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
   }
 }
