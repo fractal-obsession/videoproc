@@ -12,6 +12,7 @@ import numpy
 import tempfile
 import numpy as np
 import time
+import webvtt
 
 
 parser = argparse.ArgumentParser(description='ComfyUI tools', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -38,6 +39,7 @@ parser.add_argument('-p', '--path', type=str, default=os.path.join(os.environ['H
 
 # vid
 parser.add_argument('-V', '--video', type=str, default=os.path.join(os.environ['HOME'], 'ai/ComfyUI/input/vid/video1.mp4'), help='path to video file')
+parser.add_argument('-S', '--subs', type=str, default=None, help='path to vtt subtiles file')
 parser.add_argument('--start_time', type=float, default=None, help='time in seconds(float) from which to start in the video')
 parser.add_argument('--end_time', type=float, default=None, help='time in seconds(float) up to (excluding) which to process video')
 parser.add_argument('--start_frame', type=int, default=0, help='frame from the subclip returned by --start/end_time to start from')
@@ -79,33 +81,53 @@ def vid2frames():
 
     if args.end_time and args.start_time:
         logging.info("subclip {} to {}".format(args.start_time, args.end_time))
-        penis = args.end_time
         vid = VideoFileClip(args.video, audio_buffersize=5000000).subclip(args.start_time, args.end_time)
     else:
         vid = VideoFileClip(args.video, audio_buffersize=5000000)
+
+    if args.subs:
+        subs = webvtt.read(args.subs).captions
+        logging.info("read subs file {}".format(args.subs))
+    else:
+        subs = []
+    for sub_line in subs:
+        print("{} - {}: {}".format(sub_line.start_in_seconds, sub_line.end_in_seconds, sub_line.text))
+
 
     logging.info("clip duration is {}".format(vid.duration))
     audio = [item[0] for item in abs(vid.audio.to_soundarray(fps=vid.fps, buffersize=5000000, quantize=False))]
     audio = np.convolve(audio, np.ones(5), 'same') / 5
     audio = audio/max(audio)
     logging.info("got {} audio frames and {} video frames with max(audio) {} and min(audio) {}".format(len(audio), vid.duration * vid.fps, max(audio), min(audio)))
-    images = []
+    frames = []
 
     for index,frame in enumerate(vid.iter_frames(with_times=True)):
-        logging.info('index: {}'.format(index))
-        if args.end_frame > 0 and index >= args.end_frame:
-            logging.info(images)
-            return images
-        if index >= args.start_frame:
-            frame_save_path = os.path.join(args.tempdir, "frame_{}.png".format(index))
-            frame_volume = audio[index]
-            frame_image = PIL.Image.fromarray(frame[1])
+        frame_obj = {}
+        frame_obj['index'] = index
+        frame_obj['image'] = PIL.Image.fromarray(frame[1])
+        frame_obj['time'] = frame[0] + args.start_time
+        frame_obj['volume'] = audio[frame_obj['index']]
+        frame_obj['path'] = os.path.join(args.tempdir, "frame_{}.png".format(frame_obj['index']))
+
+        for sub_line in subs:
+            if sub_line.start_in_seconds <=frame_obj['time'] < sub_line.end_in_seconds:
+                frame_obj['subtitle'] = sub_line.text
+                break
+            else:
+                frame_obj['subtitle'] = ""
+
+        logging.info('frame: {}'.format(frame_obj))
+
+        if args.end_frame > 0 and frame_obj['index'] >= args.end_frame:
+            logging.info(frames)
+            return frames
+        if frame_obj['index'] >= args.start_frame and not (frame_obj['index'] % args.frame_step):
             if not args.dry_run:
-                frame_image.save(frame_save_path)
-            images.append((index, frame_save_path, frame_volume))
-            logging.info('Read a new frame: {}'.format(frame_save_path))
-    logging.info(images)
-    return images
+                frame_obj['image'].save(frame_obj['path'])
+            frames.append(frame_obj)
+            logging.info('Read(past tense) a new frame: {}'.format(frame_obj['path']))
+    logging.info(frames)
+    return frames
 
 def config_prompt_workflow(prompt_workflow):
     prompt_workflow['63']['inputs']['steps'] = args.steps
@@ -142,16 +164,17 @@ def command_runv():
     logging.info("running command_runv_canny")
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
-    images = vid2frames()
-    for i in range(0, len(images), args.frame_step):
-        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:03d}_{}".format(int(time.time()), images[i][0], args.command))
-        prompt_workflow['50']['inputs']['image'] = images[i][1]
-        prompt_workflow['69']['inputs']['image'] = images[i][1]
+    frames = vid2frames()
+    for frame in frames:
+        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:03d}_{}".format(int(time.time()), frame['index'], args.command))
+        prompt_workflow['50']['inputs']['image'] = frame['path']
+        prompt_workflow['69']['inputs']['image'] = frame['path']
+        prompt_workflow['75']['inputs']['text'] = frame['subtitle']
         if args.audio_modulate:
-            prompt_workflow['63']['inputs']['denoise'] = args.denoise * images[i][2]
-            logging.info("denoising after audio modulation {}".format(args.denoise * images[i][2]))
+            prompt_workflow['63']['inputs']['denoise'] = args.denoise * frame['volume']
+            logging.info("denoising after audio modulation {}".format(args.denoise * frame['volume']))
         queue_prompt(prompt_workflow)
-        print("{}".format(images[i][1]))
+        print("{}".format(frame['index']))
 
 def command_run():
     logging.info("running command_run_canny")
@@ -184,6 +207,7 @@ def command_run_prompt_blend():
             queue_prompt(prompt_workflow)
     else:
         logging.warning("please provide a path to one image file, yo")
+
 if args.command == "run":
     command_run()
 elif args.command == "status":

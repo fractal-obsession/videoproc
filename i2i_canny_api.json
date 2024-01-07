@@ -142,7 +142,7 @@
       "low_threshold": 0.1,
       "high_threshold": 0.3,
       "image": [
-        "50",
+        "78",
         0
       ]
     },
@@ -171,5 +171,34 @@
       ]
     },
     "class_type": "CLIPTextEncode"
+  },
+  "76": {
+    "inputs": {
+      "images": [
+        "53",
+        0
+      ]
+    },
+    "class_type": "PreviewImage"
+  },
+  "77": {
+    "inputs": {
+      "images": [
+        "73",
+        0
+      ]
+    },
+    "class_type": "PreviewImage"
+  },
+  "78": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "image": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels"
   }
 }
