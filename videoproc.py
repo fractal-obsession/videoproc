@@ -17,7 +17,7 @@ import webvtt
 
 parser = argparse.ArgumentParser(description='ComfyUI tools', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('command', type=str, default='run',
-                    help='which mode to use: status(display queue status), clist(list available checkpoints), run(image2image), runv(video2images)')
+                    help='which mode to use: status(display queue status), clist(list available checkpoints), run(image2image), runv(video2images), run_prompt_blend')
 # general
 parser.add_argument('-r', '--rootdir', type=str, default=os.path.join(os.environ['HOME'], "ai/ComfyUI/"), help='ComfyUI install directory')
 parser.add_argument('-c', '--checkpoint', type=str, default='bluePencilXL_v200.safetensors', help='checkpoint name to use, needs to be in ComfyUI/models/checkpoints/')
@@ -36,6 +36,9 @@ parser.add_argument('-o', '--outdir', type=str, default='', help='dir for output
 
 # i2i
 parser.add_argument('-p', '--path', type=str, default=os.path.join(os.environ['HOME'], 'ai/ComfyUI/input/batch'), help='input image, or directory with images')
+
+# prompt_blend
+parser.add_argument('--blend_steps', type=int, default=10, help='total number of steps for the prompt blending')
 
 # vid
 parser.add_argument('-V', '--video', type=str, default=os.path.join(os.environ['HOME'], 'ai/ComfyUI/input/vid/video1.mp4'), help='path to video file')
@@ -96,7 +99,7 @@ def vid2frames():
 
     logging.info("clip duration is {}".format(vid.duration))
     audio = [item[0] for item in abs(vid.audio.to_soundarray(fps=vid.fps, buffersize=5000000, quantize=False))]
-    audio = np.convolve(audio, np.ones(5), 'same') / 5
+    audio = np.convolve(audio, np.ones(15), 'same') / 15
     audio = audio/max(audio)
     logging.info("got {} audio frames and {} video frames with max(audio) {} and min(audio) {}".format(len(audio), vid.duration * vid.fps, max(audio), min(audio)))
     frames = []
@@ -104,7 +107,6 @@ def vid2frames():
     for index,frame in enumerate(vid.iter_frames(with_times=True)):
         frame_obj = {}
         frame_obj['index'] = index
-        frame_obj['image'] = PIL.Image.fromarray(frame[1])
         frame_obj['time'] = frame[0] + args.start_time
         frame_obj['volume'] = audio[frame_obj['index']]
         frame_obj['path'] = os.path.join(args.tempdir, "frame_{}.png".format(frame_obj['index']))
@@ -123,7 +125,7 @@ def vid2frames():
             return frames
         if frame_obj['index'] >= args.start_frame and not (frame_obj['index'] % args.frame_step):
             if not args.dry_run:
-                frame_obj['image'].save(frame_obj['path'])
+                PIL.Image.fromarray(frame[1]).save(frame_obj['path'])
             frames.append(frame_obj)
             logging.info('Read(past tense) a new frame: {}'.format(frame_obj['path']))
     logging.info(frames)
@@ -149,11 +151,15 @@ def config_prompt_workflow(prompt_workflow):
 
 def command_status():
     req =  requests.get("http://127.0.0.1:8188/queue")
-    print("{} running".format(req.json()['queue_running'].__len__()))
+    running = req.json()['queue_running'].__len__()
+    pending = req.json()['queue_pending'].__len__()
+    total = req.json()['queue_running'].__len__() + req.json()['queue_pending'].__len__()
+    print("{} running {} pending {} total".format(running, pending, total))
     for job in req.json()['queue_running']:
+        logging.info("running")
         logging.info(job[1])
-    print("{} pending".format(req.json()['queue_pending'].__len__()))
     for job in req.json()['queue_pending']:
+        logging.info("pending")
         logging.info(job[1])
 
 def command_checkpoint_list():
@@ -166,7 +172,7 @@ def command_runv():
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     frames = vid2frames()
     for frame in frames:
-        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:03d}_{}".format(int(time.time()), frame['index'], args.command))
+        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:05d}_{}".format(int(time.time()), frame['index'], args.command))
         prompt_workflow['50']['inputs']['image'] = frame['path']
         prompt_workflow['69']['inputs']['image'] = frame['path']
         prompt_workflow['75']['inputs']['text'] = frame['subtitle']
@@ -199,7 +205,7 @@ def command_run_prompt_blend():
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     if os.path.isfile(args.path):
-        for i in [x/10.0 for x in range(0,11)]:
+        for i in [x/float(args.blend_steps) for x in range(0, args.blend_steps + 1)]:
             prompt_workflow['74']['inputs']['conditioning_to_strength'] = i
             logging.info("mixing with factor {}".format(i))
             prompt_workflow['50']['inputs']['image'] = os.path.join(args.path)
