@@ -2,7 +2,7 @@
 
 status_cmd="python3 /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ status"
 
-python /opt/ComfyUI/main.py $COMFY_ARGS --output-directory /output --input-directory /input &
+python3 /opt/ComfyUI/main.py $COMFY_ARGS --output-directory /output --input-directory /input &
 
 while :
 do
