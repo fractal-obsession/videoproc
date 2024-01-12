@@ -1,6 +1,11 @@
-FROM python:3.11
+FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
 
 WORKDIR /opt
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update && \
+    apt install -y git python3 python3-pip && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN git clone https://github.com/comfyanonymous/ComfyUI && \
     pip install --no-cache-dir -r ComfyUI/requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
 

@@ -175,7 +175,8 @@ def command_runv():
         prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:05d}_{}".format(int(time.time()), frame['index'], args.command))
         prompt_workflow['50']['inputs']['image'] = frame['path']
         prompt_workflow['69']['inputs']['image'] = frame['path']
-        prompt_workflow['75']['inputs']['text'] = frame['subtitle']
+        if 'subtitle' in frame.keys():
+            prompt_workflow['75']['inputs']['text'] = frame['subtitle']
         if args.audio_modulate:
             prompt_workflow['63']['inputs']['denoise'] = args.denoise * frame['volume']
             logging.info("denoising after audio modulation {}".format(args.denoise * frame['volume']))
