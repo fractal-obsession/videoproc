@@ -1,6 +1,6 @@
 #!/bin/bash
 
-status_cmd="python /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ status"
+status_cmd="python3 /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ status"
 
 python /opt/ComfyUI/main.py $COMFY_ARGS --output-directory /output --input-directory /input &
 
@@ -16,7 +16,7 @@ do
   fi
 done
 
-python /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ $@
+python3 /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ $@
 
 while :
 do
