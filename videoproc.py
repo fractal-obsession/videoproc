@@ -20,7 +20,7 @@ parser.add_argument('command', type=str, default='run',
                     help='which mode to use: status(display queue status), clist(list available checkpoints), run(image2image), runv(video2images), run_prompt_blend')
 # general
 parser.add_argument('-r', '--rootdir', type=str, default=os.path.join(os.environ['HOME'], "ai/ComfyUI/"), help='ComfyUI install directory')
-parser.add_argument('-c', '--checkpoint', type=str, default='bluePencilXL_v200.safetensors', help='checkpoint name to use, needs to be in ComfyUI/models/checkpoints/')
+parser.add_argument('-c', '--checkpoint', type=str, default=None, help='checkpoint name to use, needs to be in ComfyUI/models/checkpoints/')
 parser.add_argument('-w', '--prompt_workflow', type=str, default='i2i_api.json', help='workflow json in api format (not implemented)')
 parser.add_argument('-s', '--steps', type=int, default=30, help='total denoising steps, this does not change with denoising levels')
 parser.add_argument('-d', '--denoise', type=float, default=0.5, help='denoising degree, 0 returns input image, 1 completely ignores input image')
@@ -57,11 +57,14 @@ parser.add_argument('--canny_low', type=float, default=0.05, help='canny filter 
 parser.add_argument('--canny_high', type=float, default=0.2, help='canny filter high threshold')
 
 args = parser.parse_args()
-if not args.checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
-    logging.error("checkpoint must be one of:")
-    for checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
-        logging.error(checkpoint)
-    sys.exit(1)
+if args.checkpoint:
+    if not args.checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
+        logging.error("checkpoint must be one of:")
+        for checkpoint in os.listdir(os.path.join(args.rootdir, "models/checkpoints/")):
+            logging.error(checkpoint)
+        sys.exit(1)
+else:
+    args.checkpoint = os.listdir(os.path.join(args.rootdir, "models/checkpoints/"))[0]
 
 
 if args.verbose:
