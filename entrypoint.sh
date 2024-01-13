@@ -24,9 +24,12 @@ while :
 do
   sleep 10
   status=$($status_cmd)
+  echo "$status"
   if [[ $status =~ "0 total" ]]
   then
-    echo "done"
-    exit 0
+    break
   fi
 done
+
+echo "done"
+exit 0
