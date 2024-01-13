@@ -25,7 +25,7 @@ do
   sleep 10
   status=$($status_cmd)
   echo "$status"
-  if [[ $status =~ "0 total" ]]
+  if [[ $status == "0 running 0 pending 0 total" ]]
   then
     break
   fi
