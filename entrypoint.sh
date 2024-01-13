@@ -16,7 +16,9 @@ do
   fi
 done
 
-python3 /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ $VIDEOPROC_ARGS
+echo "$VIDEOPROC_ARGS"
+
+eval /usr/src/app/videoproc.py --rootdir /opt/ComfyUI/ $@ $VIDEOPROC_ARGS
 
 while :
 do
