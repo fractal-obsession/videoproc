@@ -29,6 +29,34 @@ def get_server_info():
     server['checkpoints'] = req.json()['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0]
     return server
 
+def get_image(image_params):
+    #?filename=DSC_0026~3%20(1).jpg&type=input&subfolder=&rand=0.7957763962759173
+    req = requests.get(urljoin(args.host, "view"),image_params)
+    if req.status_code == 200:
+        with open(os.path.join(args.outdir, image_params['filename']), 'wb') as file:
+            file.write(req.content)
+        return image_params['filename']
+
+def post_image(image_path):
+    print(image_path)
+    with open(image_path, "rb") as f:
+        files = [('image', (os.path.basename(image_path), f))]
+        req = requests.post(urljoin(args.host, "upload/image"), files=files)
+        print(req.text)
+
+def get_history():
+    history = {}
+    req =  requests.get(urljoin(args.host, "history"))
+    history = req.json()
+    return history
+
+def get_all_images_from_history():
+    history = get_history()
+    for key, data in history.items():
+        logging.info(key)
+        logging.info(data['outputs'].keys())
+        if '19' in data['outputs']:
+            get_image(data['outputs']['19']['images'][0])
 
 def vid2frames():
     #tempdir = tempfile.TemporaryDirectory(delete=False)
@@ -126,9 +154,10 @@ def command_runv():
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     frames = vid2frames()
     for frame in frames:
-        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{:05d}_{}".format(int(time.time()), frame['index'], args.command))
-        prompt_workflow['50']['inputs']['image'] = frame['path']
-        prompt_workflow['69']['inputs']['image'] = frame['path']
+        post_image(frame['path'])
+        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{:05d}_{}".format(int(time.time()), frame['index'], args.command))
+        prompt_workflow['50']['inputs']['image'] = os.path.basename(frame['path'])
+        prompt_workflow['69']['inputs']['image'] = os.path.basename(frame['path'])
         if 'subtitle' in frame.keys():
             prompt_workflow['75']['inputs']['text'] = frame['subtitle']
         if args.audio_modulate:
@@ -142,15 +171,15 @@ def command_run():
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     if os.path.isfile(args.path):
-        prompt_workflow['50']['inputs']['image'] = os.path.join(args.path)
-        prompt_workflow['69']['inputs']['image'] = os.path.join(args.path)
+        post_image(args.path)
+        prompt_workflow['50']['inputs']['image'] = os.path.basename(args.path)
+        prompt_workflow['69']['inputs']['image'] = os.path.basename(args.path)
         queue_prompt(prompt_workflow)
     else:
-        print(args.path)
         for root, dirs, files in os.walk(args.path):
             for name in files:
-                print("{}/{}".format(root, name))
-                prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join(args.outdir, "{}_{}".format(int(time.time()), args.command))
+                post_image(os.path.join(root, name))
+                prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{}".format(int(time.time()), args.command))
                 prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
                 prompt_workflow['69']['inputs']['image'] = os.path.join(root, name)
                 queue_prompt(prompt_workflow)
@@ -163,8 +192,9 @@ def command_run_prompt_blend():
         for i in [x/float(args.blend_steps) for x in range(0, args.blend_steps + 1)]:
             prompt_workflow['74']['inputs']['conditioning_to_strength'] = i
             logging.info("mixing with factor {}".format(i))
-            prompt_workflow['50']['inputs']['image'] = os.path.join(args.path)
-            prompt_workflow['69']['inputs']['image'] = os.path.join(args.path)
+            post_image(args.path)
+            prompt_workflow['50']['inputs']['image'] = os.path.basename(args.path)
+            prompt_workflow['69']['inputs']['image'] = os.path.basename(args.path)
             queue_prompt(prompt_workflow)
     else:
         logging.warning("please provide a path to one image file, yo")
@@ -190,10 +220,10 @@ parser.add_argument('-n', '--noise', type=int, default=random.randint(1, 1844674
 parser.add_argument('-C', '--cfg', type=float, default=10, help='CFG Scale, also known as Configuration Scale, is a parameter in Stable Diffusion that affects how accurately the AI-generated image aligns with the original text prompt.')
 parser.add_argument('-v', '--verbose', action='store_true', help='verbosity')
 parser.add_argument('--dry_run', action='store_true', help='do not submit to api or create images form video frames')
-parser.add_argument('-o', '--outdir', type=str, default='', help='dir for output images')
+parser.add_argument('-o', '--outdir', type=str, default='', help='local dir for output images')
 
 # i2i
-parser.add_argument('-p', '--path', type=str, default=os.path.join(os.environ['HOME'], 'ai/ComfyUI/input/batch'), help='input image, or directory with images')
+parser.add_argument('-p', '--path', type=str, default=os.path.join(os.environ['HOME'], 'ai/ComfyUI/input/batch'), help='local input image, or local directory with images')
 
 # prompt_blend
 parser.add_argument('--blend_steps', type=int, default=10, help='total number of steps for the prompt blending')
@@ -242,3 +272,5 @@ elif args.command == "run_prompt_blend":
     command_run_prompt_blend()
 elif args.command == "clist":
     command_checkpoint_list()
+elif args.command == "get_all":
+    get_all_images_from_history()
