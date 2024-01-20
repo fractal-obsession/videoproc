@@ -37,6 +37,13 @@ def get_image(image_params):
             file.write(req.content)
         return image_params['filename']
 
+def post_image(image_path):
+    print(image_path)
+    with open(image_path, "rb") as f:
+        files = [('image', (os.path.basename(image_path), f))]
+        req = requests.post(urljoin(args.host, "upload/image"), files=files)
+        print(req.text)
+
 def get_history():
     history = {}
     req =  requests.get(urljoin(args.host, "history"))
@@ -147,9 +154,10 @@ def command_runv():
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     frames = vid2frames()
     for frame in frames:
+        post_image(frame['path'])
         prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{:05d}_{}".format(int(time.time()), frame['index'], args.command))
-        prompt_workflow['50']['inputs']['image'] = frame['path']
-        prompt_workflow['69']['inputs']['image'] = frame['path']
+        prompt_workflow['50']['inputs']['image'] = os.path.basename(frame['path'])
+        prompt_workflow['69']['inputs']['image'] = os.path.basename(frame['path'])
         if 'subtitle' in frame.keys():
             prompt_workflow['75']['inputs']['text'] = frame['subtitle']
         if args.audio_modulate:
@@ -163,14 +171,14 @@ def command_run():
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     if os.path.isfile(args.path):
-        prompt_workflow['50']['inputs']['image'] = os.path.join(args.path)
-        prompt_workflow['69']['inputs']['image'] = os.path.join(args.path)
+        post_image(args.path)
+        prompt_workflow['50']['inputs']['image'] = os.path.basename(args.path)
+        prompt_workflow['69']['inputs']['image'] = os.path.basename(args.path)
         queue_prompt(prompt_workflow)
     else:
-        print(args.path)
         for root, dirs, files in os.walk(args.path):
             for name in files:
-                print("{}/{}".format(root, name))
+                post_image(os.path.join(root, name))
                 prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{}".format(int(time.time()), args.command))
                 prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
                 prompt_workflow['69']['inputs']['image'] = os.path.join(root, name)
@@ -184,8 +192,9 @@ def command_run_prompt_blend():
         for i in [x/float(args.blend_steps) for x in range(0, args.blend_steps + 1)]:
             prompt_workflow['74']['inputs']['conditioning_to_strength'] = i
             logging.info("mixing with factor {}".format(i))
-            prompt_workflow['50']['inputs']['image'] = os.path.join(args.path)
-            prompt_workflow['69']['inputs']['image'] = os.path.join(args.path)
+            post_image(args.path)
+            prompt_workflow['50']['inputs']['image'] = os.path.basename(args.path)
+            prompt_workflow['69']['inputs']['image'] = os.path.basename(args.path)
             queue_prompt(prompt_workflow)
     else:
         logging.warning("please provide a path to one image file, yo")
