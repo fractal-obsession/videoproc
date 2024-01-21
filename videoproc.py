@@ -38,11 +38,12 @@ def get_image(image_params):
         return image_params['filename']
 
 def post_image(image_path):
-    print(image_path)
+    logging.info("POSTing image {} to server {}".format(image_path, args.host))
     with open(image_path, "rb") as f:
         files = [('image', (os.path.basename(image_path), f))]
         req = requests.post(urljoin(args.host, "upload/image"), files=files)
-        print(req.text)
+        logging.info(req.text)
+        return req.json()
 
 def get_history():
     history = {}
@@ -55,8 +56,9 @@ def get_all_images_from_history():
     for key, data in history.items():
         logging.info(key)
         logging.info(data['outputs'].keys())
-        if '19' in data['outputs']:
-            get_image(data['outputs']['19']['images'][0])
+        for output_id, output in data['outputs'].items():
+            if output['images'][0]['type'] == "output":
+                get_image(output['images'][0])
 
 def vid2frames():
     #tempdir = tempfile.TemporaryDirectory(delete=False)
@@ -75,9 +77,6 @@ def vid2frames():
         logging.info("read subs file {}".format(args.subs))
     else:
         subs = []
-    for sub_line in subs:
-        print("{} - {}: {}".format(sub_line.start_in_seconds, sub_line.end_in_seconds, sub_line.text))
-
 
     logging.info("clip duration is {}".format(vid.duration))
     audio = [item[0] for item in abs(vid.audio.to_soundarray(fps=vid.fps, buffersize=5000000, quantize=False))]
@@ -113,23 +112,42 @@ def vid2frames():
     logging.info(frames)
     return frames
 
-def config_prompt_workflow(prompt_workflow):
-    prompt_workflow['63']['inputs']['steps'] = args.steps
-    prompt_workflow['63']['inputs']['denoise'] = args.denoise
-    prompt_workflow['63']['inputs']['cfg'] = args.cfg
-    prompt_workflow['4']['inputs']['ckpt_name'] = args.checkpoint
-    prompt_workflow['6']['inputs']['text'] = args.prompt
-    prompt_workflow['7']['inputs']['text'] = args.negative_prompt
-    prompt_workflow['75']['inputs']['text'] = args.dynamic_prompt
-    prompt_workflow['74']['inputs']['conditioning_to_strength'] = args.prompt_mix
-    prompt_workflow['64']['inputs']['strength'] = args.canny_strength
-    prompt_workflow['73']['inputs']['low_threshold'] = args.canny_low
-    prompt_workflow['73']['inputs']['high_threshold'] = args.canny_high
-    if args.noise == -1:
-        prompt_workflow['63']['inputs']['seed'] = random.randint(1, 18446744073709551614)
-    else:
-        prompt_workflow['63']['inputs']['seed'] = args.noise
-    return prompt_workflow
+def config_prompt_workflow(prompt_workflow, prompt_type='i2i'):
+    if prompt_type == 'i2i':
+        prompt_workflow['63']['inputs']['steps'] = args.steps
+        prompt_workflow['63']['inputs']['denoise'] = args.denoise
+        prompt_workflow['63']['inputs']['cfg'] = args.cfg
+        prompt_workflow['4']['inputs']['ckpt_name'] = args.checkpoint
+        prompt_workflow['6']['inputs']['text'] = args.prompt
+        prompt_workflow['7']['inputs']['text'] = args.negative_prompt
+        prompt_workflow['75']['inputs']['text'] = args.dynamic_prompt
+        prompt_workflow['74']['inputs']['conditioning_to_strength'] = args.prompt_mix
+        prompt_workflow['64']['inputs']['strength'] = args.canny_strength
+        prompt_workflow['73']['inputs']['low_threshold'] = args.canny_low
+        prompt_workflow['73']['inputs']['high_threshold'] = args.canny_high
+        prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{}".format(int(time.time()), args.command))
+        if args.noise == -1:
+            prompt_workflow['63']['inputs']['seed'] = random.randint(1, 18446744073709551614)
+        else:
+            prompt_workflow['63']['inputs']['seed'] = args.noise
+        return prompt_workflow
+    elif prompt_type == 'i2v':
+        prompt_workflow['3']['inputs']['steps'] = args.steps
+        prompt_workflow['3']['inputs']['denoise'] = args.denoise
+        prompt_workflow['3']['inputs']['cfg'] = args.cfg
+        prompt_workflow['15']['inputs']['ckpt_name'] = args.checkpoint
+        prompt_workflow['12']['inputs']['fps'] = args.fps
+        prompt_workflow['26']['inputs']['fps'] = args.fps
+        prompt_workflow['12']['inputs']['motion_bucket_id'] = args.motion
+        prompt_workflow['12']['inputs']['augmentation_level'] = args.augmentation
+        prompt_workflow['12']['inputs']['video_frames'] = args.animation_frames
+        prompt_workflow['26']['inputs']['filename_prefix'] = os.path.join("{}_{}".format(int(time.time()), args.command))
+        if args.noise == -1:
+            prompt_workflow['3']['inputs']['seed'] = random.randint(1, 18446744073709551614)
+        else:
+            prompt_workflow['3']['inputs']['seed'] = args.noise
+        return prompt_workflow
+
 
 def command_status():
     req =  requests.get(urljoin(args.host, "queue"))
@@ -149,59 +167,80 @@ def command_checkpoint_list():
         print(checkpoint)
 
 def command_runv():
-    logging.info("running command_runv_canny")
+    logging.info("running command_runv")
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     frames = vid2frames()
     for frame in frames:
-        post_image(frame['path'])
+        res = post_image(frame['path'])
         prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{:05d}_{}".format(int(time.time()), frame['index'], args.command))
-        prompt_workflow['50']['inputs']['image'] = os.path.basename(frame['path'])
-        prompt_workflow['69']['inputs']['image'] = os.path.basename(frame['path'])
+        prompt_workflow['50']['inputs']['image'] = res['name']
+        prompt_workflow['69']['inputs']['image'] = res['name']
         if 'subtitle' in frame.keys():
             prompt_workflow['75']['inputs']['text'] = frame['subtitle']
         if args.audio_modulate:
             prompt_workflow['63']['inputs']['denoise'] = args.denoise * frame['volume']
             logging.info("denoising after audio modulation {}".format(args.denoise * frame['volume']))
         queue_prompt(prompt_workflow)
-        print("{}".format(frame['index']))
 
 def command_run():
     logging.info("running command_run_canny")
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     if os.path.isfile(args.path):
-        post_image(args.path)
-        prompt_workflow['50']['inputs']['image'] = os.path.basename(args.path)
-        prompt_workflow['69']['inputs']['image'] = os.path.basename(args.path)
+        res = post_image(args.path)
+        prompt_workflow['50']['inputs']['image'] = res['name']
+        prompt_workflow['69']['inputs']['image'] = res['name']
         queue_prompt(prompt_workflow)
     else:
         for root, dirs, files in os.walk(args.path):
             for name in files:
-                post_image(os.path.join(root, name))
-                prompt_workflow['19']['inputs']['filename_prefix'] = os.path.join("{}_{}".format(int(time.time()), args.command))
-                prompt_workflow['50']['inputs']['image'] = os.path.join(root, name)
-                prompt_workflow['69']['inputs']['image'] = os.path.join(root, name)
+                res = post_image(os.path.join(root, name))
+                prompt_workflow['50']['inputs']['image'] = res['name']
+                prompt_workflow['69']['inputs']['image'] = res['name']
                 queue_prompt(prompt_workflow)
 
 def command_run_prompt_blend():
-    logging.info("running command_run_canny")
+    logging.info("running command_run_prompt_blend")
     prompt_workflow = json.load(open('i2i_canny_api.json'))
     prompt_workflow = config_prompt_workflow(prompt_workflow)
     if os.path.isfile(args.path):
         for i in [x/float(args.blend_steps) for x in range(0, args.blend_steps + 1)]:
             prompt_workflow['74']['inputs']['conditioning_to_strength'] = i
             logging.info("mixing with factor {}".format(i))
-            post_image(args.path)
-            prompt_workflow['50']['inputs']['image'] = os.path.basename(args.path)
-            prompt_workflow['69']['inputs']['image'] = os.path.basename(args.path)
+            res = post_image(args.path)
+            prompt_workflow['50']['inputs']['image'] = res['name']
+            prompt_workflow['69']['inputs']['image'] = res['name']
             queue_prompt(prompt_workflow)
     else:
-        logging.warning("please provide a path to one image file, yo")
+        for root, dirs, files in os.walk(args.path):
+            for name in files:
+                for i in [x/float(args.blend_steps) for x in range(0, args.blend_steps + 1)]:
+                    prompt_workflow['74']['inputs']['conditioning_to_strength'] = i
+                    logging.info("mixing with factor {}".format(i))
+                    res = post_image(os.path.join(root, name))
+                    prompt_workflow['50']['inputs']['image'] = res['name']
+                    prompt_workflow['69']['inputs']['image'] = res['name']
+                    queue_prompt(prompt_workflow)
+
+def command_animate():
+    logging.info("running command_run_animate")
+    prompt_workflow = json.load(open('i2v.json'))
+    prompt_workflow = config_prompt_workflow(prompt_workflow, prompt_type='i2v')
+    if os.path.isfile(args.path):
+        res = post_image(args.path)
+        prompt_workflow['24']['inputs']['image'] = res['name']
+        queue_prompt(prompt_workflow)
+    else:
+        for root, dirs, files in os.walk(args.path):
+            for name in files:
+                res = post_image(os.path.join(root, name))
+                prompt_workflow['24']['inputs']['image'] = res['name']
+                queue_prompt(prompt_workflow)
 
 parser = argparse.ArgumentParser(description='ComfyUI tools', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('command', type=str, default='run',
-                    help='which mode to use: status(display queue status), clist(list available checkpoints), run(image2image), runv(video2images), run_prompt_blend')
+                    choices=['run', 'status', 'runv', 'run_prompt_blend', 'animate', 'clist', 'get_all'])
 
 # connection
 parser.add_argument('-H', '--host', type=str, default="http://127.0.0.1:8188", help='ComfyUI server endpoint')
@@ -244,6 +283,12 @@ parser.add_argument('--canny_strength', type=float, default=0.6, help='strength 
 parser.add_argument('--canny_low', type=float, default=0.05, help='canny filter low threshold')
 parser.add_argument('--canny_high', type=float, default=0.2, help='canny filter high threshold')
 
+# animate
+parser.add_argument('--animation_frames', type=int, default=25, help='total frames to animate')
+parser.add_argument('--fps', type=int, default=6, help='fps of animation')
+parser.add_argument('--motion', type=int, default=100, help='motion_bucket_id: The higher the number the more motion will be in the video.')
+parser.add_argument('--augmentation', type=float, default=0.5, help='The amount of noise added to the init image, the higher it is the less the video will look like the init image. Increase it for more motion.')
+
 args = parser.parse_args()
 server = get_server_info()
 if args.checkpoint:
@@ -266,10 +311,10 @@ elif args.command == "status":
     command_status()
 elif args.command == "runv":
     command_runv()
-elif args.command == "runv_canny":
-    command_runv_canny()
 elif args.command == "run_prompt_blend":
     command_run_prompt_blend()
+elif args.command == "animate":
+    command_animate()
 elif args.command == "clist":
     command_checkpoint_list()
 elif args.command == "get_all":
