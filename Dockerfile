@@ -3,7 +3,7 @@ FROM nvidia/cuda:12.3.1-runtime-ubuntu22.04
 WORKDIR /opt
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && \
-    apt install -y curl git python3 python3-pip && \
+    apt install -y curl git python3 python3-pip ffmpeg libsm6 libxext6 && \
     rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI && \
