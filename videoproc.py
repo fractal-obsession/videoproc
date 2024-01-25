@@ -57,8 +57,9 @@ def get_all_images_from_history():
         logging.info(key)
         logging.info(data['outputs'].keys())
         for output_id, output in data['outputs'].items():
-            if output['images'][0]['type'] == "output":
-                get_image(output['images'][0])
+            for image in output['images']:
+                if image['type'] == "output":
+                    get_image(image)
 
 def vid2frames():
     #tempdir = tempfile.TemporaryDirectory(delete=False)

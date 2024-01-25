@@ -7,7 +7,8 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/comfyanonymous/ComfyUI && \
-    pip install --no-cache-dir -r ComfyUI/requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
+    pip install --no-cache-dir -r ComfyUI/requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir opencv-python
 
 WORKDIR /usr/src/app
 
