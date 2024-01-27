@@ -33,7 +33,7 @@ def get_image(image_params):
     #?filename=DSC_0026~3%20(1).jpg&type=input&subfolder=&rand=0.7957763962759173
     req = requests.get(urljoin(args.host, "view"),image_params)
     if req.status_code == 200:
-        with open(os.path.join(args.outdir, image_params['filename']), 'wb') as file:
+        with open(os.path.join(args.outdir, "{}_{}".format(int(time.time()), image_params['filename'])), 'wb') as file:
             file.write(req.content)
         return image_params['filename']
 
@@ -57,9 +57,14 @@ def get_all_images_from_history():
         logging.info(key)
         logging.info(data['outputs'].keys())
         for output_id, output in data['outputs'].items():
-            for image in output['images']:
-                if image['type'] == "output":
-                    get_image(image)
+            if 'images' in output:
+                for image in output['images']:
+                    if image['type'] == "output":
+                        get_image(image)
+            if 'gifs' in output:
+                for image in output['gifs']:
+                    if image['type'] == "output":
+                        get_image(image)
 
 def vid2frames():
     #tempdir = tempfile.TemporaryDirectory(delete=False)
